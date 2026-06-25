@@ -1,0 +1,23 @@
+# Vocalift — Production Dependencies
+# Install: pip install -r requirements.txt
+
+# Web framework
+flask==3.1.1
+flask-cors==5.0.0
+flask-limiter==3.9.0
+
+# AI stem separation
+demucs>=4.0.1
+
+# YouTube downloader
+yt-dlp>=2024.11.18
+
+# Security & config
+python-dotenv==1.0.1
+cryptography>=43.0.0
+
+# Production WSGI server (use instead of flask dev server)
+gunicorn==23.0.0
+
+# Optional: Redis for rate limiting across multiple workers
+# redis==5.2.0
