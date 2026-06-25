@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="description" content="Vocalift — Extract clean acapella vocals from any YouTube video using AI stem separation."/>
+<title>Vocalift — AI Vocal Extractor</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #080c0a;
+  --surf:    #0c110e;
+  --card:    #101810;
+  --brd:     #162018;
+  --brd2:    #1e2e22;
+  --acc:     #10b981;
+  --acc2:    #34d399;
+  --acc3:    #6ee7b7;
+  --dark:    #064e35;
+  --red:     #f87171;
+  --ylw:     #fbbf24;
+  --txt:     #e8f0eb;
+  --mut:     #4a6655;
+  --mut2:    #7a9e88;
+  --r:       12px;
+  --rs:      8px;
+  --safe-b:  env(safe-area-inset-bottom, 0px);
+  --safe-t:  env(safe-area-inset-top, 0px);
+}
+
+html { height: 100%; }
+body {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--txt);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+/* ── Shell ── */
+.shell {
+  display: grid;
+  grid-template-columns: 210px 1fr;
+  grid-template-rows: 50px 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Titlebar ── */
+.titlebar {
+  grid-column: 1/-1;
+  background: var(--surf);
+  border-bottom: 1px solid var(--brd);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 12px;
+  padding-top: var(--safe-t);
+}
+.tbar-logo { display: flex; align-items: center; gap: 10px; }
+.tbar-wordmark {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.3px;
+  color: var(--acc2);
+}
+.tbar-ver {
+  font-size: 10px;
+  color: var(--mut);
+  background: var(--brd2);
+  padding: 2px 7px;
+  border-radius: 20px;
+  letter-spacing: 0.3px;
+  font-weight: 500;
+}
+.tbar-gap { flex: 1; }
+.tbar-indicator { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--mut2); }
+.tbar-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--acc2);
+  box-shadow: 0 0 7px var(--acc);
+  animation: blink 3s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ── Sidebar ── */
+.sidebar {
+  background: var(--surf);
+  border-right: 1px solid var(--brd);
+  padding: 16px 10px;
+  display: flex; flex-direction: column; gap: 2px;
+  overflow-y: auto;
+}
+.sl {
+  font-size: 9px; font-weight: 700; color: var(--mut);
+  text-transform: uppercase; letter-spacing: 1.2px;
+  padding: 12px 10px 4px;
+}
+.nav {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: var(--rs);
+  cursor: pointer; font-size: 12px; font-weight: 500;
+  color: var(--mut2); transition: all .15s;
+  border: 1px solid transparent;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.nav:hover { background: var(--brd); color: var(--txt); }
+.nav.on {
+  background: rgba(16,185,129,.1);
+  color: var(--acc2);
+  border-color: rgba(16,185,129,.2);
+}
+.nav-icon {
+  width: 16px; height: 16px; flex-shrink: 0;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.nbadge {
+  margin-left: auto;
+  background: var(--acc);
+  color: #fff;
+  font-size: 9px; font-weight: 700;
+  padding: 1px 6px; border-radius: 10px;
+}
+.sb-foot {
+  margin-top: auto;
+  padding: 14px 12px;
+  border-top: 1px solid var(--brd);
+  font-size: 11px; color: var(--mut); line-height: 1.7;
+}
+.sb-foot strong { color: var(--mut2); font-weight: 600; }
+
+/* ── Main ── */
+.main { overflow: hidden; display: flex; flex-direction: column; }
+.panel { display: none; flex-direction: column; height: 100%; overflow: hidden; }
+.panel.on { display: flex; }
+.mob-nav { display: none; }
+
+/* ── Convert layout ── */
+.cv-layout {
+  display: grid;
+  grid-template-columns: 1fr 290px;
+  flex: 1; overflow: hidden;
+}
+.cv-left {
+  padding: 28px 32px;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 18px;
+}
+.cv-right {
+  border-left: 1px solid var(--brd);
+  padding: 24px 20px;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 16px;
+}
+
+.pg-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 22px; font-weight: 700; letter-spacing: -.4px;
+  color: var(--txt);
+}
+.pg-sub { font-size: 12px; color: var(--mut2); margin-top: 4px; line-height: 1.5; }
+
+/* ── URL Card ── */
+.url-card {
+  background: var(--card);
+  border: 1.5px solid var(--brd2);
+  border-radius: var(--r);
+  padding: 20px;
+  transition: border-color .2s;
+}
+.url-card:focus-within { border-color: var(--acc); box-shadow: 0 0 0 3px rgba(16,185,129,.08); }
+.url-lbl {
+  font-size: 10px; font-weight: 600; color: var(--mut);
+  text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;
+}
+.url-row { display: flex; gap: 8px; align-items: center; }
+.url-in {
+  flex: 1; min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--brd2);
+  border-radius: var(--rs);
+  padding: 11px 14px;
+  font-size: 13px; color: var(--txt);
+  font-family: 'Inter', sans-serif; outline: none;
+  transition: border-color .2s, box-shadow .2s;
+}
+.url-in::placeholder { color: var(--mut); }
+.url-in:focus { border-color: var(--acc); box-shadow: 0 0 0 3px rgba(16,185,129,.1); }
+.url-in.ok  { border-color: var(--acc2); }
+.url-in.bad { border-color: var(--red); }
+
+.btn-paste {
+  background: var(--brd2); border: 1px solid var(--brd2);
+  border-radius: var(--rs); padding: 11px 16px;
+  color: var(--mut2); font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all .15s; white-space: nowrap;
+  font-family: 'Inter', sans-serif; flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-paste:hover { background: var(--brd); color: var(--txt); border-color: var(--acc); }
+
+.err-banner {
+  background: rgba(248,113,113,.07);
+  border: 1px solid rgba(248,113,113,.2);
+  border-radius: var(--rs); padding: 9px 12px;
+  font-size: 12px; color: var(--red);
+  display: none; align-items: center; gap: 8px; margin-top: 10px;
+}
+.err-banner.on { display: flex; }
+
+.vid-preview { display: none; gap: 14px; margin-top: 14px; align-items: flex-start; }
+.vid-preview.on { display: flex; }
+.vid-thumb {
+  width: 80px; height: 56px; border-radius: 7px;
+  background: var(--brd2); flex-shrink: 0; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--mut); font-weight: 500;
+}
+.vid-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.vid-info { flex: 1; min-width: 0; }
+.vid-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--txt); }
+.vid-meta { font-size: 11px; color: var(--mut2); margin-top: 2px; }
+.vid-tags { display: flex; gap: 5px; margin-top: 7px; flex-wrap: wrap; }
+.tag {
+  font-size: 9px; font-weight: 700; padding: 2px 8px;
+  border-radius: 20px; text-transform: uppercase; letter-spacing: .5px;
+}
+.tg { background: rgba(16,185,129,.1); color: var(--acc2); border: 1px solid rgba(16,185,129,.2); }
+.tp { background: rgba(52,211,153,.08); color: var(--acc3); border: 1px solid rgba(52,211,153,.15); }
+.ty { background: rgba(251,191,36,.08); color: var(--ylw); border: 1px solid rgba(251,191,36,.18); }
+.tr { background: rgba(248,113,113,.08); color: var(--red); border: 1px solid rgba(248,113,113,.18); }
+
+/* ── Progress Card ── */
+.prog-card { background: var(--card); border: 1px solid var(--brd2); border-radius: var(--r); padding: 20px; display: none; }
+.prog-card.on { display: block; }
+.steps { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+.step { display: flex; align-items: center; gap: 12px; }
+.sico {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1.5px solid var(--brd2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600; color: var(--mut);
+  flex-shrink: 0; transition: all .3s;
+}
+.sico.done { background: var(--acc); border-color: var(--acc); color: #fff; font-size: 12px; }
+.sico.active { background: rgba(16,185,129,.15); border-color: var(--acc2); color: var(--acc2); animation: sp 1.4s ease-in-out infinite; }
+@keyframes sp { 0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.35)} 50%{box-shadow:0 0 0 6px rgba(16,185,129,0)} }
+.stxt { flex: 1; min-width: 0; }
+.stitle { font-size: 12px; font-weight: 600; color: var(--txt); }
+.ssub { font-size: 10px; color: var(--mut2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stime { font-size: 10px; color: var(--mut); flex-shrink: 0; }
+.pbar-wrap { background: var(--brd); border-radius: 6px; height: 4px; overflow: hidden; }
+.pbar-fill { height: 100%; background: linear-gradient(90deg, var(--acc), var(--acc2)); border-radius: 6px; width: 0%; transition: width .5s ease; }
+.pbar-lbl { display: flex; justify-content: space-between; font-size: 10px; color: var(--mut); margin-top: 6px; }
+
+/* ── Result Card ── */
+.result-card {
+  background: var(--card);
+  border: 1.5px solid rgba(16,185,129,.25);
+  border-radius: var(--r); padding: 20px; display: none;
+}
+.result-card.on { display: block; }
+.res-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.res-ico {
+  width: 32px; height: 32px;
+  background: rgba(16,185,129,.12);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+.res-ico svg { width: 16px; height: 16px; stroke: var(--acc2); fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.res-title { font-size: 14px; font-weight: 700; color: var(--acc2); font-family: 'Space Grotesk', sans-serif; }
+.res-sub { font-size: 11px; color: var(--mut2); margin-top: 2px; }
+.wave-wrap { background: var(--bg); border: 1px solid var(--brd); border-radius: var(--rs); height: 52px; margin-bottom: 14px; overflow: hidden; }
+.wave-canvas { width: 100%; height: 100%; }
+audio { width: 100%; margin-bottom: 14px; accent-color: var(--acc); }
+.res-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-dl {
+  flex: 1; min-width: 130px;
+  padding: 11px 14px;
+  background: rgba(16,185,129,.1);
+  border: 1px solid rgba(16,185,129,.25);
+  border-radius: var(--rs); color: var(--acc2);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: all .15s; font-family: 'Inter', sans-serif;
+  letter-spacing: .2px;
+}
+.btn-dl:hover { background: rgba(16,185,129,.18); border-color: var(--acc); }
+.btn-new {
+  padding: 11px 16px;
+  background: var(--brd); border: 1px solid var(--brd2);
+  border-radius: var(--rs); color: var(--mut2);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: all .15s; font-family: 'Inter', sans-serif;
+}
+.btn-new:hover { background: var(--brd2); color: var(--txt); }
+
+/* ── Convert Button ── */
+.btn-convert {
+  width: 100%; padding: 14px;
+  background: var(--acc);
+  border: none; border-radius: var(--r);
+  color: #fff; font-size: 14px; font-weight: 700;
+  font-family: 'Space Grotesk', sans-serif;
+  cursor: pointer; transition: all .2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  letter-spacing: .2px;
+}
+.btn-convert:hover { background: var(--acc2); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(16,185,129,.25); }
+.btn-convert:active { transform: none; box-shadow: none; }
+.btn-convert:disabled { opacity: .35; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-convert.loading { animation: btnP 1.6s ease-in-out infinite; }
+@keyframes btnP { 0%,100%{opacity:.75} 50%{opacity:1} }
+
+/* ── Right panel ── */
+.side-lbl { font-size: 10px; font-weight: 700; color: var(--mut); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+
+/* Model info card — single model, no selector */
+.model-info {
+  background: var(--bg);
+  border: 1.5px solid var(--acc);
+  border-radius: var(--r);
+  padding: 14px 16px;
+}
+.model-info-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.model-info-name { font-size: 13px; font-weight: 700; color: var(--txt); }
+.model-info-badge {
+  font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+  text-transform: uppercase; letter-spacing: .5px;
+  background: rgba(16,185,129,.12); color: var(--acc2);
+  border: 1px solid rgba(16,185,129,.2);
+}
+.model-info-desc { font-size: 11px; color: var(--mut2); line-height: 1.6; }
+.model-info-bars { display: flex; gap: 14px; margin-top: 10px; }
+.mib-item { display: flex; flex-direction: column; gap: 3px; }
+.mib-lbl { font-size: 9px; color: var(--mut); text-transform: uppercase; letter-spacing: .5px; }
+.dots { display: flex; gap: 3px; }
+.dot { width: 7px; height: 7px; border-radius: 2px; background: var(--brd2); }
+.dot.on { background: var(--acc2); }
+
+/* Settings */
+.scard { background: var(--card); border: 1px solid var(--brd2); border-radius: var(--r); overflow: hidden; }
+.scard-head { padding: 10px 15px; border-bottom: 1px solid var(--brd); font-size: 10px; font-weight: 700; color: var(--mut2); text-transform: uppercase; letter-spacing: .8px; }
+.srow { padding: 12px 15px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--brd); }
+.srow:last-child { border-bottom: none; }
+.srow-info { flex: 1; }
+.srow-lbl { font-size: 12px; font-weight: 500; color: var(--txt); }
+.srow-desc { font-size: 10px; color: var(--mut); margin-top: 1px; }
+select.csel {
+  background: var(--bg); border: 1px solid var(--brd2); border-radius: var(--rs);
+  padding: 6px 10px; color: var(--txt); font-size: 11px;
+  font-family: 'Inter', sans-serif; outline: none; cursor: pointer; min-width: 105px;
+}
+select.csel:focus { border-color: var(--acc); }
+.tog { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+.tog input { opacity: 0; width: 0; height: 0; }
+.tog-t { position: absolute; inset: 0; background: var(--brd2); border-radius: 20px; cursor: pointer; transition: background .2s; }
+.tog-t::after { content:''; position:absolute; top:3px; left:3px; width:14px; height:14px; border-radius:50%; background:#fff; transition:transform .2s; }
+.tog input:checked + .tog-t { background: var(--acc); }
+.tog input:checked + .tog-t::after { transform: translateX(16px); }
+
+/* Info box */
+.info-box { background: rgba(16,185,129,.04); border: 1px solid rgba(16,185,129,.12); border-radius: var(--rs); padding: 12px 14px; }
+.info-box-t { font-size: 10px; font-weight: 700; color: var(--acc2); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 6px; }
+.info-box p { font-size: 11px; color: var(--mut2); line-height: 1.7; }
+
+/* Stats */
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stat-b { background: var(--bg); border: 1px solid var(--brd); border-radius: var(--rs); padding: 12px; text-align: center; }
+.stat-v { font-size: 22px; font-weight: 700; font-family: 'Space Grotesk', sans-serif; color: var(--acc2); }
+.stat-l { font-size: 9px; color: var(--mut); text-transform: uppercase; letter-spacing: .6px; margin-top: 2px; font-weight: 600; }
+
+/* Mobile settings toggle */
+.settings-toggle {
+  display: none; width: 100%; padding: 12px 16px;
+  background: var(--card); border: 1px solid var(--brd2); border-radius: var(--r);
+  color: var(--mut2); font-size: 12px; font-weight: 600;
+  cursor: pointer; text-align: left; font-family: 'Inter', sans-serif;
+  align-items: center; justify-content: space-between;
+  -webkit-tap-highlight-color: transparent;
+}
+.settings-toggle .arr { transition: transform .25s; }
+.settings-toggle.open .arr { transform: rotate(180deg); }
+
+/* ── History ── */
+.hist-panel { padding: 28px 32px; flex: 1; overflow-y: auto; }
+.hist-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; height: 260px; color: var(--mut); }
+.hist-empty-icon { width: 40px; height: 40px; stroke: var(--mut); fill: none; stroke-width: 1.5; opacity: .4; }
+.hist-list { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+.hi { background: var(--card); border: 1px solid var(--brd); border-radius: var(--r); padding: 14px 16px; display: flex; align-items: center; gap: 12px; transition: border-color .15s; }
+.hi:hover { border-color: var(--brd2); }
+.hi-thumb { width: 54px; height: 38px; border-radius: 6px; background: var(--brd2); flex-shrink: 0; overflow: hidden; }
+.hi-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.hi-info { flex: 1; min-width: 0; }
+.hi-title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--txt); }
+.hi-meta { font-size: 10px; color: var(--mut); margin-top: 3px; }
+.hi-acts { display: flex; gap: 5px; flex-shrink: 0; }
+.bsm { padding: 6px 11px; border-radius: var(--rs); font-size: 10px; font-weight: 600; cursor: pointer; border: 1px solid var(--brd2); background: var(--brd); color: var(--mut2); font-family: 'Inter', sans-serif; transition: all .15s; }
+.bsm:hover { background: var(--brd2); color: var(--txt); }
+.bsm.g { background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.2); color: var(--acc2); }
+
+/* ── About ── */
+.about-panel { padding: 0; flex: 1; overflow-y: auto; }
+.about-hero {
+  background: linear-gradient(160deg, rgba(16,185,129,.12) 0%, rgba(6,78,53,.06) 60%, transparent 100%);
+  border-bottom: 1px solid var(--brd);
+  padding: 48px 48px 40px;
+}
+.about-wordmark {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 36px; font-weight: 700; letter-spacing: -.5px;
+  color: var(--acc2); margin-bottom: 16px;
+}
+.about-lead {
+  font-size: 15px; color: var(--txt); line-height: 1.8;
+  max-width: 620px; font-weight: 400;
+}
+.about-body { padding: 40px 48px; max-width: 700px; }
+.about-section { margin-bottom: 36px; }
+.about-section h3 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px; font-weight: 700;
+  color: var(--acc2); text-transform: uppercase;
+  letter-spacing: 1px; margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--brd2);
+}
+.about-section p {
+  font-size: 13px; color: var(--mut2); line-height: 1.9;
+  margin-bottom: 10px;
+}
+.about-section p:last-child { margin-bottom: 0; }
+.about-section strong { color: var(--txt); font-weight: 600; }
+
+/* ── Toast ── */
+.toast-wrap { position: fixed; bottom: calc(20px + var(--safe-b)); right: 18px; display: flex; flex-direction: column; gap: 7px; z-index: 999; }
+.toast { background: var(--card); border: 1px solid var(--brd2); border-left: 3px solid var(--acc); border-radius: var(--rs); padding: 11px 15px; font-size: 12px; color: var(--txt); display: flex; align-items: center; gap: 9px; box-shadow: 0 4px 20px rgba(0,0,0,.4); animation: tin .2s ease; max-width: 270px; font-weight: 500; }
+@keyframes tin { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+.toast.e { border-left-color: var(--red); }
+.toast.i { border-left-color: var(--acc2); }
+
+/* ── Footer ── */
+.foot {
+  font-size: 10px; color: var(--mut);
+  text-align: center; padding: 7px 16px;
+  border-top: 1px solid var(--brd);
+  background: var(--surf); flex-shrink: 0;
+  letter-spacing: .3px;
+}
+
+/* scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: var(--brd2); border-radius: 10px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ══ MOBILE ══ */
+@media (max-width: 767px) {
+  .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; height: 100dvh; overflow: hidden; }
+  .titlebar { height: 48px; }
+  .tbar-indicator { display: none; }
+  .sidebar { display: none; }
+  .cv-layout { grid-template-columns: 1fr; }
+  .cv-right { display: none; border-left: none; border-top: 1px solid var(--brd); padding: 16px; max-height: 55vh; overflow-y: auto; }
+  .cv-right.mob-open { display: flex; }
+  .settings-toggle { display: flex; }
+  .cv-left { padding: 18px 16px; gap: 14px; }
+  .url-in { font-size: 15px; padding: 12px 14px; }
+  .btn-paste { padding: 12px 14px; }
+  .btn-convert { padding: 15px; font-size: 15px; }
+  .btn-dl { padding: 12px; font-size: 13px; }
+  .pg-title { font-size: 20px; }
+  .hist-panel { padding: 20px 16px; }
+  .about-hero { padding: 28px 20px 24px; }
+  .about-wordmark { font-size: 28px; }
+  .about-lead { font-size: 14px; }
+  .about-body { padding: 24px 20px; }
+  .toast-wrap { left: 12px; right: 12px; bottom: calc(68px + var(--safe-b)); }
+  .toast { max-width: 100%; }
+  .foot { display: none; }
+  .mob-nav { display: flex; background: var(--surf); border-top: 1px solid var(--brd); padding-bottom: var(--safe-b); }
+  .mob-tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 10px 6px 8px; cursor: pointer; color: var(--mut2); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; transition: color .15s; -webkit-tap-highlight-color: transparent; user-select: none; position: relative; }
+  .mob-tab svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; margin-bottom: 2px; }
+  .mob-tab.on { color: var(--acc2); }
+  .mob-badge { position: absolute; top: 6px; right: calc(50% - 20px); background: var(--acc); color: #fff; font-size: 8px; font-weight: 800; padding: 1px 5px; border-radius: 10px; display: none; }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .shell { grid-template-columns: 180px 1fr; }
+  .cv-layout { grid-template-columns: 1fr 250px; }
+  .cv-left { padding: 22px 24px; }
+  .cv-right { padding: 20px 16px; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Titlebar -->
+  <div class="titlebar">
+    <div class="tbar-logo">
+      <span class="tbar-wordmark">Vocalift</span>
+      <span class="tbar-ver">2.0</span>
+    </div>
+    <div class="tbar-gap"></div>
+    <div class="tbar-indicator">
+      <div class="tbar-dot"></div>
+      <span id="srvStatus">Connecting</span>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <span class="sl">Workspace</span>
+    <div class="nav on" onclick="showPanel('convert',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      Extract
+    </div>
+    <div class="nav" onclick="showPanel('history',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      History
+      <span class="nbadge" id="hBadge">0</span>
+    </div>
+    <span class="sl">Company</span>
+    <div class="nav" onclick="showPanel('about',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      About
+    </div>
+    <div class="sb-foot">
+      <strong>Max duration:</strong> 30 minutes<br>
+      <strong>Output:</strong> MP3 &middot; WAV &middot; FLAC<br>
+      AI-powered stem separation
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- CONVERT -->
+    <div class="panel on" id="panel-convert">
+      <div class="cv-layout">
+        <div class="cv-left">
+          <div>
+            <div class="pg-title">Extract Acapella</div>
+            <div class="pg-sub">Paste a YouTube link. Our AI isolates the vocals and removes all background instrumentation.</div>
+          </div>
+
+          <!-- URL Card -->
+          <div class="url-card">
+            <div class="url-lbl">YouTube URL</div>
+            <div class="url-row">
+              <input class="url-in" id="urlIn" type="url"
+                placeholder="https://www.youtube.com/watch?v=..."
+                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                oninput="onUrl(this.value)"
+                onpaste="setTimeout(()=>onUrl(this.value),20)"/>
+              <button class="btn-paste" onclick="doPaste()">Paste</button>
+            </div>
+            <div class="err-banner" id="errBanner">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span id="errMsg">Invalid URL</span>
+            </div>
+            <div class="vid-preview" id="vidPreview">
+              <div class="vid-thumb" id="vidThumb">—</div>
+              <div class="vid-info">
+                <div class="vid-title" id="vidTitle">Ready</div>
+                <div class="vid-meta" id="vidMeta"></div>
+                <div class="vid-tags" id="vidTags"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Progress -->
+          <div class="prog-card" id="progCard">
+            <div class="steps">
+              <div class="step"><div class="sico" id="si0">1</div><div class="stxt"><div class="stitle">Initialising</div><div class="ssub" id="ss0">Preparing job</div></div><div class="stime" id="st0"></div></div>
+              <div class="step"><div class="sico" id="si1">2</div><div class="stxt"><div class="stitle">Downloading audio</div><div class="ssub" id="ss1">Fetching stream</div></div><div class="stime" id="st1"></div></div>
+              <div class="step"><div class="sico" id="si2">3</div><div class="stxt"><div class="stitle">AI separation</div><div class="ssub" id="ss2">Demucs neural network</div></div><div class="stime" id="st2"></div></div>
+              <div class="step"><div class="sico" id="si3">4</div><div class="stxt"><div class="stitle">Exporting</div><div class="ssub" id="ss3">Writing output file</div></div><div class="stime" id="st3"></div></div>
+            </div>
+            <div class="pbar-wrap"><div class="pbar-fill" id="pFill"></div></div>
+            <div class="pbar-lbl"><span id="pLabel">Starting...</span><span id="pPct">0%</span></div>
+          </div>
+
+          <!-- Result -->
+          <div class="result-card" id="resultCard">
+            <div class="res-head">
+              <div class="res-ico"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+              <div><div class="res-title">Acapella Ready</div><div class="res-sub" id="resSub"></div></div>
+            </div>
+            <div class="wave-wrap"><canvas class="wave-canvas" id="waveC"></canvas></div>
+            <audio controls id="audioEl"></audio>
+            <div class="res-btns">
+              <button class="btn-dl" onclick="dlVocals()">Download Acapella</button>
+              <button class="btn-dl" id="btnBg" style="display:none" onclick="dlBg()">Download Instrumental</button>
+              <button class="btn-new" onclick="resetAll()">New Extraction</button>
+            </div>
+          </div>
+
+          <!-- Mobile settings toggle -->
+          <button class="settings-toggle" id="settingsToggle" onclick="toggleSettings()">
+            <span>Settings &amp; Output Options</span>
+            <span class="arr">&#8964;</span>
+          </button>
+          <div id="mobSettingsDrawer" style="display:none;flex-direction:column;gap:14px;"></div>
+
+          <button class="btn-convert" id="cvBtn" onclick="startConvert()" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" id="cvBtnIcon"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            <span id="cvTxt">Extract Acapella</span>
+          </button>
+        </div>
+
+        <!-- Right panel -->
+        <div class="cv-right" id="cvRight">
+
+          <div>
+            <div class="side-lbl">AI Model</div>
+            <div class="model-info">
+              <div class="model-info-top">
+                <span class="model-info-name">HTDemucs</span>
+                <span class="model-info-badge">Hybrid Transformer</span>
+              </div>
+              <div class="model-info-desc">Meta's hybrid transformer architecture trained on thousands of professional recordings. Delivers industry-level vocal isolation with balanced speed.</div>
+              <div class="model-info-bars">
+                <div class="mib-item">
+                  <div class="mib-lbl">Quality</div>
+                  <div class="dots"><div class="dot on"></div><div class="dot on"></div><div class="dot on"></div><div class="dot on"></div><div class="dot"></div></div>
+                </div>
+                <div class="mib-item">
+                  <div class="mib-lbl">Speed</div>
+                  <div class="dots"><div class="dot on"></div><div class="dot on"></div><div class="dot on"></div><div class="dot on"></div><div class="dot on"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="scard">
+            <div class="scard-head">Output Options</div>
+            <div class="srow">
+              <div class="srow-info"><div class="srow-lbl">Format</div><div class="srow-desc">Output file type</div></div>
+              <select class="csel" id="fmtSel">
+                <option value="mp3">MP3 — Fast &amp; Compatible</option>
+                <option value="wav">WAV — Lossless</option>
+                <option value="flac">FLAC — Lossless</option>
+              </select>
+            </div>
+            <div class="srow">
+              <div class="srow-info"><div class="srow-lbl">Keep instrumental</div><div class="srow-desc">Also export background track</div></div>
+              <label class="tog"><input type="checkbox" id="keepBg"/><span class="tog-t"></span></label>
+            </div>
+          </div>
+
+          <div class="info-box">
+            <div class="info-box-t">Notice</div>
+            <p>Maximum video length is <strong>30 minutes</strong>. Output defaults to MP3 (320 kbps) for fast downloads. Processing time on CPU is typically 1&ndash;3&times; the track duration. Studio recordings yield the cleanest results. First run downloads model weights (~300 MB).</p>
+          </div>
+
+          <div>
+            <div class="side-lbl">Session</div>
+            <div class="stat-grid">
+              <div class="stat-b"><div class="stat-v" id="statN">0</div><div class="stat-l">Extracted</div></div>
+              <div class="stat-b"><div class="stat-v" id="statT">—</div><div class="stat-l">Last run</div></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="panel" id="panel-history">
+      <div class="hist-panel">
+        <div class="pg-title">History</div>
+        <div class="pg-sub" style="margin-top:4px;">Extractions completed this session.</div>
+        <div id="histList">
+          <div class="hist-empty">
+            <svg class="hist-empty-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <p style="font-size:13px;color:var(--mut);">No extractions yet.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ABOUT -->
+    <div class="panel" id="panel-about">
+      <div class="about-panel">
+        <div class="about-hero">
+          <div class="about-wordmark">Vocalift</div>
+          <p class="about-lead">
+            Vocalift is an AI-powered vocal extraction platform that separates the human voice from any musical recording with professional precision. Paste a YouTube link, and within minutes receive a clean, studio-quality acapella file — ready for remixing, sampling, transcription, or archival.
+          </p>
+        </div>
+        <div class="about-body">
+          <div class="about-section">
+            <h3>What We Do</h3>
+            <p>
+              At its core, Vocalift performs <strong>audio stem separation</strong> — a process of decomposing a mixed audio signal into its constituent parts. We isolate the vocal stem and discard everything else: drums, bass, guitars, synthesisers, and any other instrumentation that sits beneath or around the voice.
+            </p>
+            <p>
+              The result is a pristine vocal track that retains the full emotional nuance and dynamic range of the original performance, without the coloration of background music.
+            </p>
+          </div>
+
+          <div class="about-section">
+            <h3>The Technology</h3>
+            <p>
+              Vocalift is built on <strong>HTDemucs</strong>, Meta AI Research's hybrid transformer model for music source separation. HTDemucs operates simultaneously in the time domain and the frequency domain, allowing it to capture both the fine temporal structure of transient sounds and the harmonic relationships between pitched instruments and voice.
+            </p>
+            <p>
+              Unlike older approaches that relied on simple spectral masking, HTDemucs was trained on thousands of professionally recorded multi-track sessions, giving it a deep understanding of what a human voice sounds like across a vast range of musical contexts, genres, languages, and recording conditions.
+            </p>
+          </div>
+
+          <div class="about-section">
+            <h3>Intended Use</h3>
+            <p>
+              Vocalift is designed for music producers, audio engineers, researchers, educators, archivists, and anyone who needs clean vocal isolation from a mixed recording. Common applications include karaoke preparation, sample clearance analysis, vocal transcription, language learning, and music education.
+            </p>
+            <p>
+              Please ensure you have the rights to process any audio content you submit. Vocalift does not store or distribute your audio. All processing occurs locally on your machine, and output files are retained only for the duration of your session.
+            </p>
+          </div>
+
+          <div class="about-section">
+            <h3>Limitations</h3>
+            <p>
+              No stem separation system is perfect. Results depend heavily on the quality of the source recording. Vocals recorded with heavy reverb, close harmonic doubling, or significant overlap with instruments in the same frequency range may exhibit mild artefacts. Live recordings tend to produce less clean results than studio productions. Maximum supported duration is <strong>30 minutes</strong> per submission.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot" id="footBar">
+      Vocalift &mdash; AI Vocal Extraction &nbsp;&middot;&nbsp; All processing is local &nbsp;&middot;&nbsp; No audio is stored
+    </div>
+  </div>
+
+  <!-- Mobile nav -->
+  <div class="mob-nav">
+    <div class="mob-tab on" id="mtab-convert" onclick="showPanel('convert',null,'convert')">
+      <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      Extract
+    </div>
+    <div class="mob-tab" id="mtab-history" onclick="showPanel('history',null,'history')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      History
+      <span class="mob-badge" id="mobBadge">0</span>
+    </div>
+    <div class="mob-tab" id="mtab-about" onclick="showPanel('about',null,'about')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      About
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+const YT_RE = /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?.*v=|shorts\/)|youtu\.be\/)[\w\-]{11}/;
+const MAX_MINUTES = 30;
+
+let curUrl = '', urlOk = false, jobId = null;
+let pollTmr = null, sessCount = 0;
+let history = [];
+const isMobile = () => window.innerWidth < 768;
+
+// ── Server health ──
+async function checkServer() {
+  try {
+    const r = await fetch('/health');
+    if (r.ok) {
+      document.getElementById('srvStatus').textContent = 'Operational';
+    } else throw new Error();
+  } catch {
+    document.getElementById('srvStatus').textContent = 'Offline';
+    document.querySelector('.tbar-dot').style.cssText = 'background:var(--red);box-shadow:0 0 6px var(--red)';
+  }
+}
+checkServer();
+
+// ── Navigation ──
+function showPanel(id, desktopEl, mobileKey) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
+  document.getElementById('panel-' + id).classList.add('on');
+  if (desktopEl) {
+    document.querySelectorAll('.sidebar .nav').forEach(n => n.classList.remove('on'));
+    desktopEl.classList.add('on');
+  }
+  if (mobileKey) {
+    document.querySelectorAll('.mob-tab').forEach(t => t.classList.remove('on'));
+    const mt = document.getElementById('mtab-' + mobileKey);
+    if (mt) mt.classList.add('on');
+  }
+}
+document.querySelectorAll('.sidebar .nav').forEach(el => {
+  el.addEventListener('click', function() {
+    document.querySelectorAll('.sidebar .nav').forEach(n => n.classList.remove('on'));
+    this.classList.add('on');
+  });
+});
+
+// ── Mobile settings drawer ──
+function toggleSettings() {
+  const btn = document.getElementById('settingsToggle');
+  const drawer = document.getElementById('mobSettingsDrawer');
+  if (!isMobile()) return;
+  const isOpen = drawer.style.display === 'flex';
+  if (!isOpen) {
+    drawer.innerHTML = '';
+    const clone = document.getElementById('cvRight').cloneNode(true);
+    clone.id = 'cvRightClone';
+    clone.style.cssText = 'display:flex;flex-direction:column;gap:14px;border:none;padding:0;';
+    clone.querySelector('#keepBg').onchange = e => document.getElementById('keepBg').checked = e.target.checked;
+    clone.querySelector('#fmtSel').onchange = e => document.getElementById('fmtSel').value = e.target.value;
+    drawer.appendChild(clone);
+    drawer.style.display = 'flex';
+    btn.classList.add('open');
+  } else {
+    drawer.style.display = 'none';
+    btn.classList.remove('open');
+  }
+}
+
+// ── URL input ──
+function onUrl(v) {
+  curUrl = v.trim();
+  const inp  = document.getElementById('urlIn');
+  const err  = document.getElementById('errBanner');
+  const prev = document.getElementById('vidPreview');
+
+  if (!curUrl) {
+    inp.className = 'url-in'; err.classList.remove('on');
+    prev.classList.remove('on'); setCvEnabled(false); urlOk = false; return;
+  }
+  if (!YT_RE.test(curUrl)) {
+    inp.className = 'url-in bad'; err.classList.add('on');
+    document.getElementById('errMsg').textContent = "That doesn't look like a valid YouTube URL.";
+    prev.classList.remove('on'); setCvEnabled(false); urlOk = false; return;
+  }
+
+  inp.className = 'url-in ok'; err.classList.remove('on');
+  const m   = curUrl.match(/(?:v=|youtu\.be\/|shorts\/)([A-Za-z0-9_-]{11})/);
+  const vid = m ? m[1] : '';
+
+  document.getElementById('vidThumb').innerHTML = vid
+    ? '<img src="https://img.youtube.com/vi/' + vid + '/mqdefault.jpg" onerror="this.parentElement.textContent=\'—\'"/>'
+    : '—';
+  document.getElementById('vidTitle').textContent = vid ? 'Video ' + vid : 'YouTube Video';
+  document.getElementById('vidMeta').textContent  = 'Ready to extract';
+  document.getElementById('vidTags').innerHTML    =
+    '<span class="tag tg">Valid URL</span>' +
+    '<span class="tag tp">Max ' + MAX_MINUTES + ' min</span>';
+  prev.classList.add('on');
+  urlOk = true; setCvEnabled(true);
+}
+
+function _applyInfo(title) {
+  if (title && title.length > 5) {
+    document.getElementById('vidTitle').textContent = title;
+    document.getElementById('vidMeta').textContent  = 'Extraction complete';
+  }
+}
+
+async function doPaste() {
+  try {
+    const t = await navigator.clipboard.readText();
+    document.getElementById('urlIn').value = t;
+    onUrl(t); toast('URL pasted', 's');
+  } catch { toast('Allow clipboard access in browser settings', 'e'); }
+}
+
+function setCvEnabled(v) { document.getElementById('cvBtn').disabled = !v; }
+
+// ── Convert ──
+async function startConvert() {
+  if (!urlOk) return;
+  const btn = document.getElementById('cvBtn');
+  btn.disabled = true; btn.classList.add('loading');
+  document.getElementById('cvTxt').textContent = 'Checking...';
+
+  document.getElementById('resultCard').classList.remove('on');
+  document.getElementById('progCard').classList.add('on');
+
+  for (let i = 0; i < 4; i++) {
+    document.getElementById('si'+i).className = 'sico';
+    document.getElementById('si'+i).textContent = i+1;
+    document.getElementById('st'+i).textContent = '';
+    document.getElementById('ss'+i).textContent = 'Waiting';
+  }
+  setProgress(0, 'Checking video duration...');
+
+  if (isMobile()) setTimeout(() => document.getElementById('progCard').scrollIntoView({behavior:'smooth'}), 100);
+
+  try {
+    const res  = await fetch('/api/convert', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        url: curUrl, model: 'htdemucs',
+        format: document.getElementById('fmtSel').value,
+        keep_bg: document.getElementById('keepBg').checked,
+      })
+    });
+    const data = await res.json();
+    if (data.error) { showError(data.error); return; }
+    jobId = data.job_id;
+    pollTmr = setInterval(pollJob, 1400);
+  } catch { showError('Cannot reach server. Ensure the application is running.'); }
+}
+
+async function pollJob() {
+  if (!jobId) return;
+  try {
+    const res = await fetch('/api/status/' + jobId);
+    const job = await res.json();
+    updateSteps(job);
+    setProgress(job.progress || 0, job.message || '');
+    if (job.status === 'done')  { clearInterval(pollTmr); onDone(job); }
+    if (job.status === 'error') { clearInterval(pollTmr); showError(job.error || 'An error occurred.'); }
+  } catch {}
+}
+
+let _stepTs = [0,0,0,0];
+function updateSteps(job) {
+  const step = job.step || 0, now = Date.now();
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById('si'+(i-1));
+    if (i < step) {
+      el.className = 'sico done'; el.textContent = '';
+      el.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    } else if (i === step) {
+      if (el.className !== 'sico active') { el.className = 'sico active'; el.textContent = i; _stepTs[i-1] = now; }
+      document.getElementById('ss'+(i-1)).textContent = job.message || '';
+    } else {
+      if (el.className !== 'sico') { el.className = 'sico'; el.textContent = i; }
+    }
+  }
+}
+
+function setProgress(pct, label) {
+  document.getElementById('pFill').style.width  = pct + '%';
+  document.getElementById('pLabel').textContent = label;
+  document.getElementById('pPct').textContent   = pct + '%';
+}
+
+function onDone(job) {
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById('si'+i);
+    el.className = 'sico done'; el.textContent = '';
+    el.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  }
+  setProgress(100, 'Complete');
+  document.getElementById('audioEl').src = '/api/download/' + jobId;
+  document.getElementById('btnBg').style.display = job.bg_file ? 'block' : 'none';
+  document.getElementById('resSub').textContent  = job.title || ('Job ' + jobId);
+  document.getElementById('resultCard').classList.add('on');
+  if (job.title) _applyInfo(job.title);
+  drawWave();
+  sessCount++;
+  document.getElementById('statN').textContent = sessCount;
+  document.getElementById('statT').textContent = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  addHistory(job);
+  toast('Extraction complete', 's');
+  if (isMobile()) setTimeout(() => document.getElementById('resultCard').scrollIntoView({behavior:'smooth'}), 200);
+  const btn = document.getElementById('cvBtn');
+  btn.disabled = false; btn.classList.remove('loading');
+  document.getElementById('cvTxt').textContent = 'Extract Acapella';
+}
+
+function showError(msg) {
+  clearInterval(pollTmr);
+  document.getElementById('errMsg').textContent = msg;
+  document.getElementById('errBanner').classList.add('on');
+  document.getElementById('progCard').classList.remove('on');
+  toast(msg, 'e');
+  const btn = document.getElementById('cvBtn');
+  btn.disabled = false; btn.classList.remove('loading');
+  document.getElementById('cvTxt').textContent = 'Extract Acapella';
+  urlOk = true;
+}
+
+function dlVocals() { window.open('/api/download/' + jobId, '_blank'); }
+function dlBg()     { window.open('/api/download_bg/' + jobId, '_blank'); }
+
+function resetAll() {
+  document.getElementById('urlIn').value = '';
+  document.getElementById('urlIn').className = 'url-in';
+  document.getElementById('vidPreview').classList.remove('on');
+  document.getElementById('progCard').classList.remove('on');
+  document.getElementById('resultCard').classList.remove('on');
+  document.getElementById('errBanner').classList.remove('on');
+  urlOk = false; curUrl = ''; jobId = null; setCvEnabled(false);
+}
+
+// ── Waveform ──
+function drawWave() {
+  const c = document.getElementById('waveC'), ctx = c.getContext('2d');
+  c.width = c.offsetWidth; c.height = c.offsetHeight;
+  const W = c.width, H = c.height, bars = Math.floor(W / 4);
+  ctx.clearRect(0, 0, W, H);
+  for (let i = 0; i < bars; i++) {
+    const a = (Math.random() * .65 + .08) * (H / 2);
+    const g = ctx.createLinearGradient(0, H/2-a, 0, H/2+a);
+    g.addColorStop(0, '#10b981'); g.addColorStop(1, '#064e35');
+    ctx.fillStyle = g; ctx.fillRect(i*4, H/2-a, 2.5, a*2);
+  }
+}
+
+// ── History ──
+function addHistory(job) {
+  const m = curUrl.match(/(?:v=|youtu\.be\/|shorts\/)([A-Za-z0-9_-]{11})/);
+  history.unshift({ vid: m?m[1]:'', title: job.title||'Unknown', jid: jobId, url: curUrl, time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) });
+  const n = history.length;
+  document.getElementById('hBadge').textContent   = n;
+  document.getElementById('mobBadge').textContent = n;
+  document.getElementById('mobBadge').style.display = 'block';
+  renderHistory();
+}
+function renderHistory() {
+  const el = document.getElementById('histList');
+  if (!history.length) { el.innerHTML = '<div class="hist-empty"><svg class="hist-empty-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><p style="font-size:13px;color:var(--mut);">No extractions yet.</p></div>'; return; }
+  el.innerHTML = '<div class="hist-list">' + history.map((h, i) => `
+    <div class="hi">
+      <div class="hi-thumb"><img src="https://img.youtube.com/vi/${h.vid}/mqdefault.jpg" onerror="this.parentElement.style.background='var(--brd2)'"/></div>
+      <div class="hi-info">
+        <div class="hi-title">${h.title}</div>
+        <div class="hi-meta">${h.time} &middot; Job ${h.jid ? h.jid.slice(0,8) : ''}</div>
+      </div>
+      <div class="hi-acts">
+        <button class="bsm g" onclick="window.open('/api/download/${h.jid}','_blank')">Download</button>
+        <button class="bsm" onclick="reloadH(${i})">Reload</button>
+      </div>
+    </div>`).join('') + '</div>';
+}
+function reloadH(i) {
+  const h = history[i];
+  document.getElementById('urlIn').value = h.url;
+  onUrl(h.url);
+  showPanel('convert', null, 'convert');
+  document.querySelectorAll('.sidebar .nav')[0].classList.add('on');
+  document.querySelectorAll('.sidebar .nav')[1].classList.remove('on');
+  toast('URL loaded', 's');
+}
+
+// ── Toast ──
+function toast(msg, type='i') {
+  const wrap = document.getElementById('toasts');
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  wrap.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+window.addEventListener('resize', () => {
+  const drawer = document.getElementById('mobSettingsDrawer');
+  if (!isMobile() && drawer.style.display === 'flex') {
+    drawer.style.display = 'none';
+    document.getElementById('settingsToggle').classList.remove('open');
+  }
+  if (document.getElementById('resultCard').classList.contains('on')) drawWave();
+});
+</script>
+</body>
+</html>
