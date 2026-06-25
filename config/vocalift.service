@@ -1,0 +1,63 @@
+# ═══════════════════════════════════════════════════════════════
+#  Vocalift — Systemd Service
+#  Place at: /etc/systemd/system/vocalift.service
+#  Enable:   sudo systemctl enable vocalift
+#  Start:    sudo systemctl start vocalift
+#  Logs:     sudo journalctl -u vocalift -f
+# ═══════════════════════════════════════════════════════════════
+
+[Unit]
+Description=Vocalift — YouTube Acapella Extractor
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+
+# ── Run as a dedicated non-root user ───────────────────────────
+User=vocalift
+Group=vocalift
+WorkingDirectory=/opt/vocalift
+
+# ── Environment ────────────────────────────────────────────────
+EnvironmentFile=/opt/vocalift/.env
+Environment="PATH=/opt/vocalift/venv/bin:/usr/local/bin:/usr/bin:/bin"
+
+# ── Start Gunicorn via venv ────────────────────────────────────
+ExecStart=/opt/vocalift/venv/bin/gunicorn \
+    -c gunicorn.conf.py \
+    server:app
+
+ExecReload=/bin/kill -s HUP $MAINPID
+
+# ── Process hardening ──────────────────────────────────────────
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/vocalift/logs /opt/vocalift/vocalift_work /opt/vocalift/vocalift_output
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=false      # Demucs needs JIT
+
+# ── Resource limits ────────────────────────────────────────────
+LimitNOFILE=65536
+MemoryMax=8G
+CPUQuota=90%
+TasksMax=256
+
+# ── Restart policy ─────────────────────────────────────────────
+Restart=on-failure
+RestartSec=5s
+StartLimitBurst=3
+StartLimitIntervalSec=60s
+
+# ── Logging ────────────────────────────────────────────────────
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vocalift
+
+[Install]
+WantedBy=multi-user.target
